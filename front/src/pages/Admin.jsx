@@ -166,6 +166,8 @@ const Staff = () => {
   const [staff, setStaff] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentStaffId, setCurrentStaffId] = useState(null);
 
   const fetchStaff = async () => {
     try {
@@ -182,36 +184,70 @@ const Staff = () => {
     fetchStaff();
   }, []);
 
-  const handleAddStaff = async (e) => {
+  const handleSaveStaff = async (e) => {
     e.preventDefault();
 
     if (!newName) return;
 
     try {
-      const res = await fetch("/api/staff", {
-        method: "POST",
+      const url = isEditing ? `/api/staff/${currentStaffId}` : "/api/staff";
+      const method = isEditing ? "PUT" : "POST";
 
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
-
         body: JSON.stringify({ full_name: newName }),
       });
 
       if (!res.ok) {
         const errData = await res.json();
-
-        throw new Error(errData.error || "Failed to add staff");
+        throw new Error(errData.error || "Failed to save staff");
       }
 
       setNewName("");
-
       setIsModalOpen(false);
+      setIsEditing(false);
+      setCurrentStaffId(null);
 
       fetchStaff();
     } catch (err) {
       console.error(err);
-
-      alert("Error adding staff: " + err.message);
+      alert("Error saving staff: " + err.message);
     }
+  };
+
+  const handleDeleteStaff = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this staff member?"))
+      return;
+
+    try {
+      const res = await fetch(`/api/staff/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete staff");
+      }
+
+      fetchStaff();
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting staff: " + err.message);
+    }
+  };
+
+  const openAddModal = () => {
+    setNewName("");
+    setIsEditing(false);
+    setCurrentStaffId(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (member) => {
+    setNewName(member.full_name);
+    setIsEditing(true);
+    setCurrentStaffId(member.id);
+    setIsModalOpen(true);
   };
 
   return (
@@ -219,16 +255,16 @@ const Staff = () => {
       <SectionHeader
         title="Staff Management"
         actionLabel="Add Staff"
-        onAction={() => setIsModalOpen(true)}
+        onAction={openAddModal}
       />
 
       {/* Modal Popup */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Add New Barber"
+        title={isEditing ? "Edit Barber" : "Add New Barber"}
       >
-        <form onSubmit={handleAddStaff} className="space-y-4">
+        <form onSubmit={handleSaveStaff} className="space-y-4">
           <div>
             <label className="block text-gray-400 text-xs uppercase mb-1">
               Barber Name
@@ -246,7 +282,7 @@ const Staff = () => {
             type="submit"
             className="w-full bg-barber-gold text-black font-bold uppercase py-3 hover:bg-white transition-colors"
           >
-            Save Barber
+            {isEditing ? "Update Barber" : "Save Barber"}
           </button>
         </form>
       </Modal>
@@ -255,9 +291,9 @@ const Staff = () => {
         {staff.map((member) => (
           <div
             key={member.id}
-            className="bg-barber-gray p-6 border border-white/5 group hover:border-barber-gold/50 transition-colors"
+            className="bg-barber-gray p-6 border border-white/5 group hover:border-barber-gold/50 transition-colors flex justify-between items-center"
           >
-            <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-xl font-bold text-barber-gold">
                 {member.full_name ? member.full_name[0] : "?"}
               </div>
@@ -269,6 +305,20 @@ const Staff = () => {
                   Barber
                 </p>
               </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => openEditModal(member)}
+                className="text-gray-400 hover:text-white text-xs uppercase"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleDeleteStaff(member.id)}
+                className="text-red-500 hover:text-red-400 text-xs uppercase"
+              >
+                Delete
+              </button>
             </div>
           </div>
         ))}
@@ -285,6 +335,8 @@ const Staff = () => {
 const Services = () => {
   const [services, setServices] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentServiceId, setCurrentServiceId] = useState(null);
   const [newService, setNewService] = useState({
     name: "",
     category: "Hair",
@@ -308,18 +360,23 @@ const Services = () => {
     fetchServices();
   }, []);
 
-  const handleAddService = async (e) => {
+  const handleSaveService = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/services", {
-        method: "POST",
+      const url = isEditing
+        ? `/api/services/${currentServiceId}`
+        : "/api/services";
+      const method = isEditing ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newService),
       });
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to add service");
+        throw new Error(errData.error || "Failed to save service");
       }
 
       setNewService({
@@ -330,11 +387,57 @@ const Services = () => {
         price: "",
       });
       setIsModalOpen(false);
+      setIsEditing(false);
+      setCurrentServiceId(null);
       fetchServices();
     } catch (err) {
       console.error(err);
-      alert("Error adding service: " + err.message);
+      alert("Error saving service: " + err.message);
     }
+  };
+
+  const handleDeleteService = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this service?"))
+      return;
+    try {
+      const res = await fetch(`/api/services/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete service");
+      }
+      fetchServices();
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting service: " + err.message);
+    }
+  };
+
+  const openAddModal = () => {
+    setNewService({
+      name: "",
+      category: "Hair",
+      description: "",
+      duration_minutes: "30",
+      price: "",
+    });
+    setIsEditing(false);
+    setCurrentServiceId(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (service) => {
+    setNewService({
+      name: service.name,
+      category: service.category,
+      description: service.description,
+      duration_minutes: service.duration_minutes,
+      price: service.price,
+    });
+    setIsEditing(true);
+    setCurrentServiceId(service.id);
+    setIsModalOpen(true);
   };
 
   return (
@@ -342,15 +445,15 @@ const Services = () => {
       <SectionHeader
         title="Service Menu"
         actionLabel="Add Service"
-        onAction={() => setIsModalOpen(true)}
+        onAction={openAddModal}
       />
 
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Add New Service"
+        title={isEditing ? "Edit Service" : "Add New Service"}
       >
-        <form onSubmit={handleAddService} className="space-y-4">
+        <form onSubmit={handleSaveService} className="space-y-4">
           <div>
             <label className="block text-gray-400 text-xs uppercase mb-1">
               Service Name
@@ -440,12 +543,14 @@ const Services = () => {
             type="submit"
             className="w-full bg-barber-gold text-black font-bold uppercase py-3 hover:bg-white transition-colors"
           >
-            Save Service
+            {isEditing ? "Update Service" : "Save Service"}
           </button>
         </form>
       </Modal>
 
-      <Table headers={["Name", "Category", "Duration", "Price", "Status"]}>
+      <Table
+        headers={["Name", "Category", "Duration", "Price", "Status", "Actions"]}
+      >
         {services.map((s, i) => (
           <tr key={i} className="hover:bg-white/5 transition-colors">
             <td className="px-6 py-4 font-bold text-white">
@@ -460,11 +565,25 @@ const Services = () => {
             <td className="px-6 py-4">
               <span className="text-green-500">Active</span>
             </td>
+            <td className="px-6 py-4 flex gap-2">
+              <button
+                onClick={() => openEditModal(s)}
+                className="text-gray-400 hover:text-white text-xs uppercase"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleDeleteService(s.id)}
+                className="text-red-500 hover:text-red-400 text-xs uppercase"
+              >
+                Delete
+              </button>
+            </td>
           </tr>
         ))}
         {services.length === 0 && (
           <tr>
-            <td colSpan="5" className="p-4 text-center text-gray-500">
+            <td colSpan="6" className="p-4 text-center text-gray-500">
               No services found.
             </td>
           </tr>

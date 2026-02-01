@@ -67,6 +67,42 @@ app.post("/api/services", async (req, res) => {
   }
 });
 
+// Update Service
+app.put("/api/services/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name, category, description, duration_minutes, price } = req.body;
+
+  if (!name || !price)
+    return res.status(400).json({ error: "Name and Price are required" });
+
+  try {
+    await db.query(
+      "UPDATE services SET name = ?, category = ?, description = ?, duration_minutes = ?, price = ? WHERE id = ?",
+      [name, category, description, duration_minutes, price, id],
+    );
+    res.json({ id, message: "Service updated" });
+  } catch (error) {
+    console.error("Error updating service:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to update service: " + error.message });
+  }
+});
+
+// Delete Service
+app.delete("/api/services/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query("DELETE FROM services WHERE id = ?", [id]);
+    res.json({ message: "Service deleted" });
+  } catch (error) {
+    console.error("Error deleting service:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to delete service: " + error.message });
+  }
+});
+
 // Get Staff (for dropdown)
 app.get("/api/staff", async (req, res) => {
   try {
@@ -94,6 +130,36 @@ app.post("/api/staff", async (req, res) => {
   } catch (error) {
     console.error("Error adding staff:", error);
     res.status(500).json({ error: "Failed to add staff: " + error.message });
+  }
+});
+
+// Update Staff
+app.put("/api/staff/:id", async (req, res) => {
+  const { id } = req.params;
+  const { full_name } = req.body;
+  if (!full_name) return res.status(400).json({ error: "Name is required" });
+
+  try {
+    await db.query("UPDATE staff SET full_name = ? WHERE id = ?", [
+      full_name,
+      id,
+    ]);
+    res.json({ id, full_name, message: "Staff updated" });
+  } catch (error) {
+    console.error("Error updating staff:", error);
+    res.status(500).json({ error: "Failed to update staff: " + error.message });
+  }
+});
+
+// Delete Staff
+app.delete("/api/staff/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query("DELETE FROM staff WHERE id = ?", [id]);
+    res.json({ message: "Staff deleted" });
+  } catch (error) {
+    console.error("Error deleting staff:", error);
+    res.status(500).json({ error: "Failed to delete staff: " + error.message });
   }
 });
 
