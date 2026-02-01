@@ -184,18 +184,33 @@ const Staff = () => {
 
   const handleAddStaff = async (e) => {
     e.preventDefault();
+
     if (!newName) return;
+
     try {
-      await fetch("/api/staff", {
+      const res = await fetch("/api/staff", {
         method: "POST",
+
         headers: { "Content-Type": "application/json" },
+
         body: JSON.stringify({ full_name: newName }),
       });
+
+      if (!res.ok) {
+        const errData = await res.json();
+
+        throw new Error(errData.error || "Failed to add staff");
+      }
+
       setNewName("");
+
       setIsModalOpen(false);
+
       fetchStaff();
     } catch (err) {
       console.error(err);
+
+      alert("Error adding staff: " + err.message);
     }
   };
 
@@ -289,17 +304,31 @@ const Services = () => {
 
   const handleAddService = async (e) => {
     e.preventDefault();
+
     try {
-      await fetch("/api/services", {
+      const res = await fetch("/api/services", {
         method: "POST",
+
         headers: { "Content-Type": "application/json" },
+
         body: JSON.stringify(newService),
       });
+
+      if (!res.ok) {
+        const errData = await res.json();
+
+        throw new Error(errData.error || "Failed to add service");
+      }
+
       setNewService({ name: "", price: "" });
+
       setIsModalOpen(false);
+
       fetchServices();
     } catch (err) {
       console.error(err);
+
+      alert("Error adding service: " + err.message);
     }
   };
 
