@@ -99,7 +99,7 @@ export default function Book() {
               <option value="">-- Choose a Service --</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {s.name} - £{s.price}
                 </option>
               ))}
             </select>

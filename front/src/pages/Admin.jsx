@@ -285,7 +285,13 @@ const Staff = () => {
 const Services = () => {
   const [services, setServices] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newService, setNewService] = useState({ name: "" });
+  const [newService, setNewService] = useState({
+    name: "",
+    category: "Hair",
+    description: "",
+    duration_minutes: "30",
+    price: "",
+  });
 
   const fetchServices = async () => {
     try {
@@ -304,30 +310,29 @@ const Services = () => {
 
   const handleAddService = async (e) => {
     e.preventDefault();
-
     try {
       const res = await fetch("/api/services", {
         method: "POST",
-
         headers: { "Content-Type": "application/json" },
-
         body: JSON.stringify(newService),
       });
 
       if (!res.ok) {
         const errData = await res.json();
-
         throw new Error(errData.error || "Failed to add service");
       }
 
-      setNewService({ name: "" });
-
+      setNewService({
+        name: "",
+        category: "Hair",
+        description: "",
+        duration_minutes: "30",
+        price: "",
+      });
       setIsModalOpen(false);
-
       fetchServices();
     } catch (err) {
       console.error(err);
-
       alert("Error adding service: " + err.message);
     }
   };
@@ -361,6 +366,76 @@ const Services = () => {
               placeholder="e.g. Skin Fade"
             />
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-400 text-xs uppercase mb-1">
+                Category
+              </label>
+              <select
+                value={newService.category}
+                onChange={(e) =>
+                  setNewService({ ...newService, category: e.target.value })
+                }
+                className="w-full bg-black border border-white/20 text-white p-3 focus:border-barber-gold outline-none"
+              >
+                <option value="Hair">Hair</option>
+                <option value="Beard">Beard</option>
+                <option value="Package">Package</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-400 text-xs uppercase mb-1">
+                Price (£)
+              </label>
+              <input
+                type="number"
+                required
+                value={newService.price}
+                onChange={(e) =>
+                  setNewService({ ...newService, price: e.target.value })
+                }
+                className="w-full bg-black border border-white/20 text-white p-3 focus:border-barber-gold outline-none"
+                placeholder="25.00"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-400 text-xs uppercase mb-1">
+                Duration (Min)
+              </label>
+              <input
+                type="number"
+                required
+                value={newService.duration_minutes}
+                onChange={(e) =>
+                  setNewService({
+                    ...newService,
+                    duration_minutes: e.target.value,
+                  })
+                }
+                className="w-full bg-black border border-white/20 text-white p-3 focus:border-barber-gold outline-none"
+                placeholder="30"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-400 text-xs uppercase mb-1">
+              Description
+            </label>
+            <textarea
+              value={newService.description}
+              onChange={(e) =>
+                setNewService({ ...newService, description: e.target.value })
+              }
+              className="w-full bg-black border border-white/20 text-white p-3 focus:border-barber-gold outline-none h-20"
+              placeholder="Brief description of the service..."
+            />
+          </div>
+
           <button
             type="submit"
             className="w-full bg-barber-gold text-black font-bold uppercase py-3 hover:bg-white transition-colors"
@@ -370,10 +445,18 @@ const Services = () => {
         </form>
       </Modal>
 
-      <Table headers={["Service Name", "Status"]}>
+      <Table headers={["Name", "Category", "Duration", "Price", "Status"]}>
         {services.map((s, i) => (
           <tr key={i} className="hover:bg-white/5 transition-colors">
-            <td className="px-6 py-4 font-bold text-white">{s.name}</td>
+            <td className="px-6 py-4 font-bold text-white">
+              {s.name}
+              <div className="text-xs text-gray-500 font-normal">
+                {s.description}
+              </div>
+            </td>
+            <td className="px-6 py-4 text-gray-400">{s.category}</td>
+            <td className="px-6 py-4 text-gray-400">{s.duration_minutes}m</td>
+            <td className="px-6 py-4 font-mono text-barber-gold">£{s.price}</td>
             <td className="px-6 py-4">
               <span className="text-green-500">Active</span>
             </td>
@@ -381,7 +464,7 @@ const Services = () => {
         ))}
         {services.length === 0 && (
           <tr>
-            <td colSpan="2" className="p-4 text-center text-gray-500">
+            <td colSpan="5" className="p-4 text-center text-gray-500">
               No services found.
             </td>
           </tr>
