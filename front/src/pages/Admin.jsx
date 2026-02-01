@@ -95,32 +95,71 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 
 // --- Feature Modules ---
 
-const DashboardHome = () => (
-  <div className="space-y-8">
-    <SectionHeader title="Dashboard Overview" />
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <StatCard
-        title="Today's Revenue"
-        value="£450"
-        subtext="+12% from last week"
-        trend="up"
-      />
-      <StatCard title="Appointments" value="18" subtext="4 slots remaining" />
-      <StatCard
-        title="No-Show Rate"
-        value="2.1%"
-        subtext="Low risk"
-        trend="up"
-      />
-      <StatCard
-        title="Avg. Ticket"
-        value="£32.50"
-        subtext="Target: £30.00"
-        trend="up"
-      />
+const DashboardHome = () => {
+  const [revenue, setRevenue] = useState(0);
+  const [appointmentCount, setAppointmentCount] = useState(0);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch Revenue
+      const revRes = await fetch("/api/revenue/today");
+      const revData = revRes.ok ? await revRes.json() : { total: 0 };
+      setRevenue(revData.total || 0);
+
+      // Fetch Today's Bookings Count
+      // (Optimally this should be a dedicated API, but filtering client-side for now works for small datasets)
+      const bookRes = await fetch("/api/bookings");
+      const bookData = bookRes.ok ? await bookRes.json() : [];
+
+      const today = new Date().toISOString().split("T")[0];
+      const todaysBookings = Array.isArray(bookData)
+        ? bookData.filter((b) => b.appointment_date.startsWith(today))
+        : [];
+
+      setAppointmentCount(todaysBookings.length);
+    } catch (e) {
+      console.error("Dashboard fetch error:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+    // Poll every 30 seconds for "constant" updates
+    const interval = setInterval(fetchDashboardData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="space-y-8">
+      <SectionHeader title="Dashboard Overview" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Today's Revenue"
+          value={`£${revenue}`}
+          subtext="Updated just now"
+          trend="up"
+        />
+        <StatCard
+          title="Appointments"
+          value={appointmentCount}
+          subtext="Today's bookings"
+        />
+        <StatCard
+          title="No-Show Rate"
+          value="2.1%"
+          subtext="Low risk"
+          trend="up"
+        />
+        <StatCard
+          title="Avg. Ticket"
+          value="£32.50"
+          subtext="Target: £30.00"
+          trend="up"
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);

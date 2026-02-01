@@ -259,6 +259,25 @@ app.get("/api/bookings", async (req, res) => {
   }
 });
 
+// Get Today's Revenue
+app.get("/api/revenue/today", async (req, res) => {
+  try {
+    const query = `
+      SELECT SUM(s.price) as total_revenue
+      FROM appointments a
+      JOIN services s ON a.service_id = s.id
+      WHERE a.appointment_date = CURDATE()
+      AND a.status != 'cancelled'
+    `;
+    const [rows] = await db.query(query);
+    const total = rows[0].total_revenue || 0;
+    res.json({ total });
+  } catch (error) {
+    console.error("Error fetching revenue:", error);
+    res.status(500).json({ error: "Failed to fetch revenue" });
+  }
+});
+
 // --- Database Setup Route (Run once) ---
 app.get("/api/setup-db", async (req, res) => {
   const connection = await db.getConnection();
