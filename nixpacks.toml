@@ -1,0 +1,17 @@
+# Nixpacks configuration for the entire project
+
+[phases.setup]
+nixPkgs = ['nodejs_20']
+
+[phases.build]
+cmds = [
+    # 1. Install and Build Frontend
+    'cd front && npm install && npm run build',
+
+    # 2. Install Backend dependencies
+    'cd back && npm install'
+]
+
+[start]
+# Start the backend server (which serves the built frontend)
+cmd = 'cd back && npm start'
