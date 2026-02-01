@@ -1,0 +1,13 @@
+{
+  "name": "barber-shop-app",
+  "version": "1.0.0",
+  "description": "Barber Shop App (Monorepo)",
+  "scripts": {
+    "start": "cd back && npm start",
+    "build": "echo 'Building via Nixpacks...'",
+    "postinstall": "echo 'Postinstall check'"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}
