@@ -156,53 +156,72 @@ const DashboardHome = () => (
   </div>
 );
 
-const Bookings = () => (
-  <div>
-    <SectionHeader title="Bookings & Calendar" action="New Booking" />
-    <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
-      <div className="lg:col-span-5 bg-barber-gray border border-white/5 p-6 min-h-[500px]">
-        {/* Calendar Placeholder UI */}
-        <div className="grid grid-cols-7 gap-px bg-white/10 border border-white/10 mb-4 text-center text-gray-400 text-xs uppercase py-2">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-            <div key={d}>{d}</div>
-          ))}
+const Bookings = () => {
+  const [bookings, setBookings] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/bookings")
+      .then((res) => res.json())
+      .then((data) => setBookings(data))
+      .catch((err) => console.error("Failed to load bookings:", err));
+  }, []);
+
+  return (
+    <div>
+      <SectionHeader title="Bookings & Calendar" action="New Booking" />
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
+        <div className="lg:col-span-5 bg-barber-gray border border-white/5 p-6 min-h-[500px]">
+          {/* Calendar Placeholder UI */}
+          <div className="grid grid-cols-7 gap-px bg-white/10 border border-white/10 mb-4 text-center text-gray-400 text-xs uppercase py-2">
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+              <div key={d}>{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-px bg-white/5 h-96">
+            {Array.from({ length: 35 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-barber-gray hover:bg-white/5 p-2 transition-colors relative"
+              >
+                <span className="text-gray-600 text-xs">{i + 1}</span>
+                {i === 14 && (
+                  <div className="absolute inset-x-1 top-6 bg-barber-gold/80 text-black text-[10px] font-bold px-1 py-0.5 truncate">
+                    Booked
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-7 gap-px bg-white/5 h-96">
-          {Array.from({ length: 35 }).map((_, i) => (
-            <div
-              key={i}
-              className="bg-barber-gray hover:bg-white/5 p-2 transition-colors relative"
-            >
-              <span className="text-gray-600 text-xs">{i + 1}</span>
-              {i === 14 && (
-                <div className="absolute inset-x-1 top-6 bg-barber-gold/80 text-black text-[10px] font-bold px-1 py-0.5 truncate">
-                  Booked
+        <div className="lg:col-span-2 space-y-4">
+          <div className="bg-barber-gray p-6 border border-white/5">
+            <h3 className="text-white font-bold mb-4 uppercase text-sm">
+              Upcoming
+            </h3>
+            {bookings.length === 0 && (
+              <p className="text-gray-500 text-xs">No upcoming bookings.</p>
+            )}
+            {bookings.map((booking) => (
+              <div
+                key={booking.id}
+                className="mb-4 pb-4 border-b border-white/5 last:border-0 last:pb-0"
+              >
+                <div className="text-barber-gold font-bold">
+                  {new Date(booking.appointment_date).toLocaleDateString()} @{" "}
+                  {booking.start_time}
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="lg:col-span-2 space-y-4">
-        <div className="bg-barber-gray p-6 border border-white/5">
-          <h3 className="text-white font-bold mb-4 uppercase text-sm">
-            Upcoming
-          </h3>
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="mb-4 pb-4 border-b border-white/5 last:border-0 last:pb-0"
-            >
-              <div className="text-barber-gold font-bold">Today, 2:00 PM</div>
-              <div className="text-white">Mike Ross</div>
-              <div className="text-gray-500 text-xs">Beard Trim • Marcus</div>
-            </div>
-          ))}
+                <div className="text-white">{booking.customer_name}</div>
+                <div className="text-gray-500 text-xs">
+                  {booking.service_name} • {booking.staff_name || "Any Staff"}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Staff = () => (
   <div>
