@@ -161,8 +161,18 @@ const Bookings = () => {
 
   useEffect(() => {
     fetch("/api/bookings")
-      .then((res) => res.json())
-      .then((data) => setBookings(data))
+      .then((res) => {
+        if (!res.ok) throw new Error("Network response was not ok");
+        return res.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setBookings(data);
+        } else {
+          console.error("Bookings API returned non-array:", data);
+          setBookings([]);
+        }
+      })
       .catch((err) => console.error("Failed to load bookings:", err));
   }, []);
 
@@ -230,8 +240,18 @@ const Staff = () => {
 
   const fetchStaff = () => {
     fetch("/api/staff")
-      .then((res) => res.json())
-      .then((data) => setStaff(data))
+      .then((res) => {
+        if (!res.ok) throw new Error("Network response was not ok");
+        return res.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setStaff(data);
+        } else {
+          console.error("Staff API returned non-array:", data);
+          setStaff([]);
+        }
+      })
       .catch((err) => console.error(err));
   };
 
@@ -340,8 +360,18 @@ const Services = () => {
 
   const fetchServices = () => {
     fetch("/api/services")
-      .then((res) => res.json())
-      .then((data) => setServices(data))
+      .then((res) => {
+        if (!res.ok) throw new Error("Network response was not ok");
+        return res.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setServices(data);
+        } else {
+          console.error("Services API returned non-array:", data);
+          setServices([]);
+        }
+      })
       .catch((err) => console.error(err));
   };
 
