@@ -233,6 +233,58 @@ app.post("/api/bookings", async (req, res) => {
   }
 });
 
+// Get Dashboard Stats (Consolidated)
+app.get("/api/dashboard/stats", async (req, res) => {
+  try {
+    const connection = await db.getConnection();
+    try {
+      // 1. Today's Revenue & Count
+      const [todayStats] = await connection.query(`
+        SELECT
+          COALESCE(SUM(s.price), 0) as revenue,
+          COUNT(*) as count
+        FROM appointments a
+        JOIN services s ON a.service_id = s.id
+        WHERE a.appointment_date = CURDATE()
+        AND a.status != 'cancelled'
+      `);
+
+      // 2. All-time Stats for Avg Ticket & No-Show Rate
+      const [overallStats] = await connection.query(`
+        SELECT
+          COUNT(*) as total_count,
+          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count
+        FROM appointments
+      `);
+
+      const [avgPriceRow] = await connection.query(`
+        SELECT AVG(s.price) as avg_ticket
+        FROM appointments a
+        JOIN services s ON a.service_id = s.id
+        WHERE a.status != 'cancelled'
+      `);
+
+      const totalApps = overallStats[0].total_count || 0;
+      const cancelledApps = overallStats[0].cancelled_count || 0;
+      const noShowRate =
+        totalApps > 0 ? ((cancelledApps / totalApps) * 100).toFixed(1) : 0;
+      const avgTicket = (avgPriceRow[0].avg_ticket || 0).toFixed(2);
+
+      res.json({
+        revenue: todayStats[0].revenue,
+        appointments: todayStats[0].count,
+        noShowRate: noShowRate,
+        avgTicket: avgTicket,
+      });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    res.status(500).json({ error: "Failed to fetch dashboard stats" });
+  }
+});
+
 // Get All Bookings (for Admin)
 app.get("/api/bookings", async (req, res) => {
   try {
@@ -256,25 +308,6 @@ app.get("/api/bookings", async (req, res) => {
   } catch (error) {
     console.error("Error fetching bookings:", error);
     res.status(500).json({ error: "Failed to fetch bookings" });
-  }
-});
-
-// Get Today's Revenue
-app.get("/api/revenue/today", async (req, res) => {
-  try {
-    const query = `
-      SELECT SUM(s.price) as total_revenue
-      FROM appointments a
-      JOIN services s ON a.service_id = s.id
-      WHERE a.appointment_date = CURDATE()
-      AND a.status != 'cancelled'
-    `;
-    const [rows] = await db.query(query);
-    const total = rows[0].total_revenue || 0;
-    res.json({ total });
-  } catch (error) {
-    console.error("Error fetching revenue:", error);
-    res.status(500).json({ error: "Failed to fetch revenue" });
   }
 });
 
