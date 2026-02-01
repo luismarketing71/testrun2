@@ -320,6 +320,47 @@ app.get("/api/bookings", async (req, res) => {
   }
 });
 
+// Get Today's Revenue (Legacy/Simple check)
+app.get("/api/revenue/today", async (req, res) => {
+  try {
+    const query = `
+      SELECT SUM(s.price) as total_revenue
+      FROM appointments a
+      JOIN services s ON a.service_id = s.id
+      WHERE a.appointment_date = CURDATE()
+      AND a.status != 'cancelled'
+    `;
+    const [rows] = await db.query(query);
+    const total = rows[0].total_revenue || 0;
+    res.json({ total });
+  } catch (error) {
+    console.error("Error fetching revenue:", error);
+    res.status(500).json({ error: "Failed to fetch revenue" });
+  }
+});
+
+// Debug Endpoint
+app.get("/api/debug", async (req, res) => {
+  try {
+    const [timeResult] = await db.query(
+      "SELECT NOW() as db_time, CURDATE() as db_date",
+    );
+    const [counts] = await db.query(
+      "SELECT (SELECT COUNT(*) FROM appointments) as appt_count, (SELECT COUNT(*) FROM services) as service_count",
+    );
+
+    res.json({
+      status: "online",
+      server_time: new Date(),
+      db_time: timeResult[0].db_time,
+      db_date: timeResult[0].db_date,
+      counts: counts[0],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Database Setup Route (Run once) ---
 app.get("/api/setup-db", async (req, res) => {
   const connection = await db.getConnection();
