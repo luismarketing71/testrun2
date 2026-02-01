@@ -38,7 +38,7 @@ app.get("/api/db-test", async (req, res) => {
 app.get("/api/services", async (req, res) => {
   try {
     const [rows] = await db.query(
-      "SELECT id, name, price FROM services WHERE is_active = true",
+      "SELECT id, name FROM services WHERE is_active = true",
     );
     res.json(rows);
   } catch (error) {
@@ -73,25 +73,23 @@ app.post("/api/staff", async (req, res) => {
     res.json({ id: result.insertId, full_name, message: "Staff added" });
   } catch (error) {
     console.error("Error adding staff:", error);
-    res.status(500).json({ error: "Failed to add staff" });
+    res.status(500).json({ error: "Failed to add staff: " + error.message });
   }
 });
 
 // Add New Service
 app.post("/api/services", async (req, res) => {
-  const { name, price, duration_minutes } = req.body;
-  if (!name || !price)
-    return res.status(400).json({ error: "Name and Price are required" });
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: "Name is required" });
 
   try {
-    const [result] = await db.query(
-      "INSERT INTO services (name, price) VALUES (?, ?)",
-      [name, price],
-    );
-    res.json({ id: result.insertId, name, price, message: "Service added" });
+    const [result] = await db.query("INSERT INTO services (name) VALUES (?)", [
+      name,
+    ]);
+    res.json({ id: result.insertId, name, message: "Service added" });
   } catch (error) {
     console.error("Error adding service:", error);
-    res.status(500).json({ error: "Failed to add service" });
+    res.status(500).json({ error: "Failed to add service: " + error.message });
   }
 });
 
@@ -181,9 +179,16 @@ app.get("/api/setup-db", async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // 0. Drop existing tables (Reverse order of dependencies)
+    await connection.query("DROP TABLE IF EXISTS payments");
+    await connection.query("DROP TABLE IF EXISTS appointments");
+    await connection.query("DROP TABLE IF EXISTS services");
+    await connection.query("DROP TABLE IF EXISTS staff");
+    await connection.query("DROP TABLE IF EXISTS users");
+
     // 1. Create Tables
     await connection.query(`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         full_name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -192,7 +197,7 @@ app.get("/api/setup-db", async (req, res) => {
     `);
 
     await connection.query(`
-      CREATE TABLE IF NOT EXISTS staff (
+      CREATE TABLE staff (
         id INT AUTO_INCREMENT PRIMARY KEY,
         full_name VARCHAR(255) NOT NULL,
         is_active BOOLEAN DEFAULT TRUE
@@ -200,16 +205,15 @@ app.get("/api/setup-db", async (req, res) => {
     `);
 
     await connection.query(`
-      CREATE TABLE IF NOT EXISTS services (
+      CREATE TABLE services (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        price DECIMAL(10, 2) NOT NULL,
         is_active BOOLEAN DEFAULT TRUE
       )
     `);
 
     await connection.query(`
-      CREATE TABLE IF NOT EXISTS appointments (
+      CREATE TABLE appointments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT,
         staff_id INT,
@@ -224,30 +228,26 @@ app.get("/api/setup-db", async (req, res) => {
       )
     `);
 
-    // 2. Seed Data (only if empty)
-    const [services] = await connection.query("SELECT * FROM services");
-    if (services.length === 0) {
-      await connection.query(`
-        INSERT INTO services (name, price) VALUES
-        ('Classic Cut', 25.00),
-        ('Skin Fade', 30.00),
-        ('Beard Trim', 15.00),
-        ('Full Works', 55.00)
-      `);
-    }
+    // 2. Seed Data
+    await connection.query(`
+      INSERT INTO services (name) VALUES
+      ('Classic Cut'),
+      ('Skin Fade'),
+      ('Beard Trim'),
+      ('Full Works')
+    `);
 
-    const [staff] = await connection.query("SELECT * FROM staff");
-    if (staff.length === 0) {
-      await connection.query(`
-        INSERT INTO staff (full_name) VALUES
-        ('Luis (Master Barber)'),
-        ('Marcus (Senior)'),
-        ('Sarah (Stylist)')
-      `);
-    }
+    await connection.query(`
+      INSERT INTO staff (full_name) VALUES
+      ('Luis (Master Barber)'),
+      ('Marcus (Senior)'),
+      ('Sarah (Stylist)')
+    `);
 
     await connection.commit();
-    res.json({ message: "Database setup and seeded successfully!" });
+    res.json({
+      message: "Database reset and seeded successfully (Price Removed)!",
+    });
   } catch (error) {
     await connection.rollback();
     console.error("Setup error:", error);

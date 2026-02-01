@@ -285,7 +285,7 @@ const Staff = () => {
 const Services = () => {
   const [services, setServices] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newService, setNewService] = useState({ name: "", price: "" });
+  const [newService, setNewService] = useState({ name: "" });
 
   const fetchServices = async () => {
     try {
@@ -320,7 +320,7 @@ const Services = () => {
         throw new Error(errData.error || "Failed to add service");
       }
 
-      setNewService({ name: "", price: "" });
+      setNewService({ name: "" });
 
       setIsModalOpen(false);
 
@@ -361,21 +361,6 @@ const Services = () => {
               placeholder="e.g. Skin Fade"
             />
           </div>
-          <div>
-            <label className="block text-gray-400 text-xs uppercase mb-1">
-              Price (£)
-            </label>
-            <input
-              type="number"
-              required
-              value={newService.price}
-              onChange={(e) =>
-                setNewService({ ...newService, price: e.target.value })
-              }
-              className="w-full bg-black border border-white/20 text-white p-3 focus:border-barber-gold outline-none"
-              placeholder="30"
-            />
-          </div>
           <button
             type="submit"
             className="w-full bg-barber-gold text-black font-bold uppercase py-3 hover:bg-white transition-colors"
@@ -385,11 +370,10 @@ const Services = () => {
         </form>
       </Modal>
 
-      <Table headers={["Service Name", "Price", "Status"]}>
+      <Table headers={["Service Name", "Status"]}>
         {services.map((s, i) => (
           <tr key={i} className="hover:bg-white/5 transition-colors">
             <td className="px-6 py-4 font-bold text-white">{s.name}</td>
-            <td className="px-6 py-4 font-mono text-barber-gold">£{s.price}</td>
             <td className="px-6 py-4">
               <span className="text-green-500">Active</span>
             </td>
@@ -397,7 +381,7 @@ const Services = () => {
         ))}
         {services.length === 0 && (
           <tr>
-            <td colSpan="3" className="p-4 text-center text-gray-500">
+            <td colSpan="2" className="p-4 text-center text-gray-500">
               No services found.
             </td>
           </tr>

@@ -96,13 +96,12 @@ export default function Book() {
               required
               className="w-full bg-barber-black border border-white/10 text-white p-4 rounded-none focus:ring-2 focus:ring-barber-gold focus:border-transparent transition-all"
             >
-              <option value="">-- Choose a Service --</option>
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} - £{s.price}
-                </option>
-              ))}
-            </select>
+                    <option value="">-- Choose a Service --</option>
+                    {services.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
