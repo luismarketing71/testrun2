@@ -234,25 +234,28 @@ const Bookings = () => {
 };
 
 const Staff = () => {
+  // Initialize with empty array to prevent render crashes
   const [staff, setStaff] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [error, setError] = useState(null);
 
-  const fetchStaff = () => {
-    fetch("/api/staff")
-      .then((res) => {
-        if (!res.ok) throw new Error("Network response was not ok");
-        return res.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setStaff(data);
-        } else {
-          console.error("Staff API returned non-array:", data);
-          setStaff([]);
-        }
-      })
-      .catch((err) => console.error(err));
+  const fetchStaff = async () => {
+    try {
+      const res = await fetch("/api/staff");
+      if (!res.ok) {
+        // If 500/404, just return empty list so page doesn't break
+        console.warn("Staff fetch failed", res.status);
+        return;
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setStaff(data);
+      }
+    } catch (err) {
+      console.error("Error loading staff:", err);
+      setError("Could not load staff.");
+    }
   };
 
   useEffect(() => {
@@ -271,7 +274,7 @@ const Staff = () => {
       if (res.ok) {
         setNewName("");
         setIsAdding(false);
-        fetchStaff();
+        fetchStaff(); // Refresh list
       }
     } catch (err) {
       console.error(err);
@@ -282,7 +285,7 @@ const Staff = () => {
     <div>
       <SectionHeader title="Staff Management" action="Add Staff" />
 
-      {/* Add Staff Form (Simple Toggle) */}
+      {/* Add Staff Toggle */}
       <div className="mb-6">
         <button
           onClick={() => setIsAdding(!isAdding)}
@@ -304,7 +307,7 @@ const Staff = () => {
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="w-full bg-black border border-white/20 text-white p-2"
+                className="w-full bg-black border border-white/20 text-white p-2 focus:border-barber-gold outline-none"
                 placeholder="e.g. John Doe"
               />
             </div>
@@ -321,13 +324,13 @@ const Staff = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {staff.map((member) => (
           <div
-            key={member.id}
+            key={member.id || Math.random()}
             className="bg-barber-gray p-6 border border-white/5 group hover:border-barber-gold/50 transition-colors"
           >
             <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-xl font-bold text-barber-gold">
-                  {member.full_name[0]}
+                  {member.full_name ? member.full_name[0] : "?"}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">
@@ -339,10 +342,19 @@ const Staff = () => {
                 </div>
               </div>
             </div>
+            {/* Visual placeholder stats to match original look */}
+            <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-white/5 mb-4">
+              <div>
+                <div className="text-xs text-gray-500 uppercase">Status</div>
+                <div className="text-white font-mono">Active</div>
+              </div>
+            </div>
           </div>
         ))}
-        {staff.length === 0 && (
-          <div className="text-gray-500">No staff found. Add one above.</div>
+        {staff.length === 0 && !error && (
+          <div className="text-gray-500 col-span-full py-8 text-center border border-dashed border-white/10">
+            No staff members found. Add one to get started.
+          </div>
         )}
       </div>
     </div>
@@ -358,21 +370,20 @@ const Services = () => {
     duration: 30,
   });
 
-  const fetchServices = () => {
-    fetch("/api/services")
-      .then((res) => {
-        if (!res.ok) throw new Error("Network response was not ok");
-        return res.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setServices(data);
-        } else {
-          console.error("Services API returned non-array:", data);
-          setServices([]);
-        }
-      })
-      .catch((err) => console.error(err));
+  const fetchServices = async () => {
+    try {
+      const res = await fetch("/api/services");
+      if (!res.ok) {
+        console.warn("Services fetch failed", res.status);
+        return;
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setServices(data);
+      }
+    } catch (err) {
+      console.error("Error loading services:", err);
+    }
   };
 
   useEffect(() => {
@@ -425,7 +436,7 @@ const Services = () => {
                 onChange={(e) =>
                   setNewService({ ...newService, name: e.target.value })
                 }
-                className="w-full bg-black border border-white/20 text-white p-2"
+                className="w-full bg-black border border-white/20 text-white p-2 focus:border-barber-gold outline-none"
                 placeholder="e.g. Skin Fade"
               />
             </div>
@@ -439,7 +450,7 @@ const Services = () => {
                 onChange={(e) =>
                   setNewService({ ...newService, price: e.target.value })
                 }
-                className="w-full bg-black border border-white/20 text-white p-2"
+                className="w-full bg-black border border-white/20 text-white p-2 focus:border-barber-gold outline-none"
                 placeholder="25.00"
               />
             </div>
@@ -453,7 +464,7 @@ const Services = () => {
                 onChange={(e) =>
                   setNewService({ ...newService, duration: e.target.value })
                 }
-                className="w-full bg-black border border-white/20 text-white p-2"
+                className="w-full bg-black border border-white/20 text-white p-2 focus:border-barber-gold outline-none"
               />
             </div>
             <button
@@ -493,7 +504,6 @@ const Services = () => {
     </div>
   );
 };
-
 const Customers = () => (
   <div>
     <SectionHeader title="Customer CRM" action="Add Client" />
