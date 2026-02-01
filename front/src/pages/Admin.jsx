@@ -223,125 +223,246 @@ const Bookings = () => {
   );
 };
 
-const Staff = () => (
-  <div>
-    <SectionHeader title="Staff Management" action="Add Staff" />
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {["Luis", "Marcus", "Sarah", "James"].map((name) => (
-        <div
-          key={name}
-          className="bg-barber-gray p-6 border border-white/5 group hover:border-barber-gold/50 transition-colors"
-        >
-          <div className="flex justify-between items-start mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-xl font-bold text-barber-gold">
-                {name[0]}
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">{name}</h3>
-                <p className="text-gray-500 text-xs uppercase tracking-wide">
-                  Senior Barber
-                </p>
-              </div>
-            </div>
-            <MoreHorizontal className="text-gray-500 hover:text-white cursor-pointer" />
-          </div>
-          <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-white/5 mb-4">
-            <div>
-              <div className="text-xs text-gray-500 uppercase">Revenue</div>
-              <div className="text-white font-mono">£4,200</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 uppercase">Rating</div>
-              <div className="text-barber-gold font-mono">4.9 ★</div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-[10px] bg-white/5 px-2 py-1 text-gray-400 border border-white/5">
-              Mon
-            </span>
-            <span className="text-[10px] bg-white/5 px-2 py-1 text-gray-400 border border-white/5">
-              Tue
-            </span>
-            <span className="text-[10px] bg-barber-gold text-black font-bold px-2 py-1">
-              Wed
-            </span>
-            <span className="text-[10px] bg-white/5 px-2 py-1 text-gray-400 border border-white/5">
-              Thu
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
+const Staff = () => {
+  const [staff, setStaff] = useState([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState("");
 
-const Services = () => (
-  <div>
-    <SectionHeader title="Service Menu" action="Add Service" />
-    <Table
-      headers={["Service Name", "Category", "Duration", "Price", "Status", ""]}
-    >
-      {[
-        {
-          name: "Classic Cut",
-          cat: "Hair",
-          dur: "45m",
-          price: "£25.00",
-          active: true,
-        },
-        {
-          name: "Skin Fade",
-          cat: "Hair",
-          dur: "60m",
-          price: "£30.00",
-          active: true,
-        },
-        {
-          name: "Beard Sculpt",
-          cat: "Beard",
-          dur: "30m",
-          price: "£15.00",
-          active: true,
-        },
-        {
-          name: "Hot Towel Shave",
-          cat: "Beard",
-          dur: "45m",
-          price: "£35.00",
-          active: true,
-        },
-        {
-          name: "Full Works",
-          cat: "Package",
-          dur: "90m",
-          price: "£55.00",
-          active: true,
-        },
-      ].map((s, i) => (
-        <tr key={i} className="hover:bg-white/5 transition-colors group">
-          <td className="px-6 py-4 font-bold text-white">{s.name}</td>
-          <td className="px-6 py-4">
-            <span className="px-2 py-1 bg-white/5 text-xs rounded-sm border border-white/10">
-              {s.cat}
-            </span>
-          </td>
-          <td className="px-6 py-4">{s.dur}</td>
-          <td className="px-6 py-4 font-mono text-barber-gold">{s.price}</td>
-          <td className="px-6 py-4">
-            <span className="w-2 h-2 rounded-full bg-green-500 inline-block mr-2"></span>
-            Active
-          </td>
-          <td className="px-6 py-4 text-right">
-            <button className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
-              Edit
+  const fetchStaff = () => {
+    fetch("/api/staff")
+      .then((res) => res.json())
+      .then((data) => setStaff(data))
+      .catch((err) => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchStaff();
+  }, []);
+
+  const handleAddStaff = async (e) => {
+    e.preventDefault();
+    if (!newName) return;
+    try {
+      const res = await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: newName }),
+      });
+      if (res.ok) {
+        setNewName("");
+        setIsAdding(false);
+        fetchStaff();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div>
+      <SectionHeader title="Staff Management" action="Add Staff" />
+
+      {/* Add Staff Form (Simple Toggle) */}
+      <div className="mb-6">
+        <button
+          onClick={() => setIsAdding(!isAdding)}
+          className="bg-barber-gold text-black px-4 py-2 font-bold uppercase text-sm mb-4"
+        >
+          {isAdding ? "Cancel" : "Add New Staff"}
+        </button>
+
+        {isAdding && (
+          <form
+            onSubmit={handleAddStaff}
+            className="bg-white/5 p-4 border border-white/10 flex gap-4 items-end"
+          >
+            <div className="flex-1">
+              <label className="block text-gray-400 text-xs uppercase mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full bg-black border border-white/20 text-white p-2"
+                placeholder="e.g. John Doe"
+              />
+            </div>
+            <button
+              type="submit"
+              className="bg-green-600 text-white px-4 py-2 font-bold uppercase text-sm"
+            >
+              Save
             </button>
-          </td>
-        </tr>
-      ))}
-    </Table>
-  </div>
-);
+          </form>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {staff.map((member) => (
+          <div
+            key={member.id}
+            className="bg-barber-gray p-6 border border-white/5 group hover:border-barber-gold/50 transition-colors"
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-xl font-bold text-barber-gold">
+                  {member.full_name[0]}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    {member.full_name}
+                  </h3>
+                  <p className="text-gray-500 text-xs uppercase tracking-wide">
+                    Barber
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {staff.length === 0 && (
+          <div className="text-gray-500">No staff found. Add one above.</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Services = () => {
+  const [services, setServices] = useState([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newService, setNewService] = useState({
+    name: "",
+    price: "",
+    duration: 30,
+  });
+
+  const fetchServices = () => {
+    fetch("/api/services")
+      .then((res) => res.json())
+      .then((data) => setServices(data))
+      .catch((err) => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const handleAddService = async (e) => {
+    e.preventDefault();
+    if (!newService.name || !newService.price) return;
+    try {
+      const res = await fetch("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newService),
+      });
+      if (res.ok) {
+        setNewService({ name: "", price: "", duration: 30 });
+        setIsAdding(false);
+        fetchServices();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div>
+      <SectionHeader title="Service Menu" action="Add Service" />
+
+      <div className="mb-6">
+        <button
+          onClick={() => setIsAdding(!isAdding)}
+          className="bg-barber-gold text-black px-4 py-2 font-bold uppercase text-sm mb-4"
+        >
+          {isAdding ? "Cancel" : "Add New Service"}
+        </button>
+
+        {isAdding && (
+          <form
+            onSubmit={handleAddService}
+            className="bg-white/5 p-4 border border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
+          >
+            <div>
+              <label className="block text-gray-400 text-xs uppercase mb-1">
+                Service Name
+              </label>
+              <input
+                type="text"
+                value={newService.name}
+                onChange={(e) =>
+                  setNewService({ ...newService, name: e.target.value })
+                }
+                className="w-full bg-black border border-white/20 text-white p-2"
+                placeholder="e.g. Skin Fade"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-xs uppercase mb-1">
+                Price (£)
+              </label>
+              <input
+                type="number"
+                value={newService.price}
+                onChange={(e) =>
+                  setNewService({ ...newService, price: e.target.value })
+                }
+                className="w-full bg-black border border-white/20 text-white p-2"
+                placeholder="25.00"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-xs uppercase mb-1">
+                Duration (min)
+              </label>
+              <input
+                type="number"
+                value={newService.duration}
+                onChange={(e) =>
+                  setNewService({ ...newService, duration: e.target.value })
+                }
+                className="w-full bg-black border border-white/20 text-white p-2"
+              />
+            </div>
+            <button
+              type="submit"
+              className="bg-green-600 text-white px-4 py-2 font-bold uppercase text-sm h-10"
+            >
+              Save
+            </button>
+          </form>
+        )}
+      </div>
+
+      <Table headers={["Service Name", "Price", "Status", ""]}>
+        {services.map((s, i) => (
+          <tr key={i} className="hover:bg-white/5 transition-colors group">
+            <td className="px-6 py-4 font-bold text-white">{s.name}</td>
+            <td className="px-6 py-4 font-mono text-barber-gold">£{s.price}</td>
+            <td className="px-6 py-4">
+              <span className="w-2 h-2 rounded-full bg-green-500 inline-block mr-2"></span>
+              Active
+            </td>
+            <td className="px-6 py-4 text-right">
+              <button className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                Edit
+              </button>
+            </td>
+          </tr>
+        ))}
+        {services.length === 0 && (
+          <tr>
+            <td colSpan="4" className="p-4 text-center text-gray-500">
+              No services found. Add one above.
+            </td>
+          </tr>
+        )}
+      </Table>
+    </div>
+  );
+};
 
 const Customers = () => (
   <div>

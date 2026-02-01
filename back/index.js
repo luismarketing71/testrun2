@@ -60,6 +60,41 @@ app.get("/api/staff", async (req, res) => {
   }
 });
 
+// Add New Staff
+app.post("/api/staff", async (req, res) => {
+  const { full_name } = req.body;
+  if (!full_name) return res.status(400).json({ error: "Name is required" });
+
+  try {
+    const [result] = await db.query(
+      "INSERT INTO staff (full_name) VALUES (?)",
+      [full_name],
+    );
+    res.json({ id: result.insertId, full_name, message: "Staff added" });
+  } catch (error) {
+    console.error("Error adding staff:", error);
+    res.status(500).json({ error: "Failed to add staff" });
+  }
+});
+
+// Add New Service
+app.post("/api/services", async (req, res) => {
+  const { name, price, duration_minutes } = req.body;
+  if (!name || !price)
+    return res.status(400).json({ error: "Name and Price are required" });
+
+  try {
+    const [result] = await db.query(
+      "INSERT INTO services (name, price) VALUES (?, ?)",
+      [name, price],
+    );
+    res.json({ id: result.insertId, name, price, message: "Service added" });
+  } catch (error) {
+    console.error("Error adding service:", error);
+    res.status(500).json({ error: "Failed to add service" });
+  }
+});
+
 // Create Booking
 app.post("/api/bookings", async (req, res) => {
   const { name, email, serviceId, staffId, date, time } = req.body;
