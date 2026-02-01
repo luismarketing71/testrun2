@@ -109,7 +109,29 @@ app.post("/api/bookings", async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Find or Create User
+    // 1. Get Service Duration to calculate End Time
+    const [serviceRows] = await connection.query(
+      "SELECT duration_minutes FROM services WHERE id = ?",
+      [serviceId],
+    );
+
+    if (serviceRows.length === 0) {
+      throw new Error("Service not found");
+    }
+
+    const duration = serviceRows[0].duration_minutes || 30; // Default 30 mins
+
+    // Calculate End Time
+    const [hours, minutes] = time.split(":").map(Number);
+    const endDate = new Date();
+    endDate.setHours(hours);
+    endDate.setMinutes(minutes + duration);
+
+    const endHours = String(endDate.getHours()).padStart(2, "0");
+    const endMinutes = String(endDate.getMinutes()).padStart(2, "0");
+    const endTime = `${endHours}:${endMinutes}`;
+
+    // 2. Find or Create User
     let [users] = await connection.query(
       "SELECT id FROM users WHERE email = ?",
       [email],
@@ -126,10 +148,10 @@ app.post("/api/bookings", async (req, res) => {
       userId = result.insertId;
     }
 
-    // 2. Create Appointment
+    // 3. Create Appointment (Now includes end_time)
     await connection.query(
-      "INSERT INTO appointments (user_id, service_id, staff_id, appointment_date, start_time, status) VALUES (?, ?, ?, ?, ?, ?)",
-      [userId, serviceId, staffId || null, date, time, "confirmed"],
+      "INSERT INTO appointments (user_id, service_id, staff_id, appointment_date, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [userId, serviceId, staffId || null, date, time, endTime, "confirmed"],
     );
 
     await connection.commit();
@@ -137,7 +159,9 @@ app.post("/api/bookings", async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error("Booking error:", error);
-    res.status(500).json({ error: "Failed to create booking" });
+    res
+      .status(500)
+      .json({ error: "Failed to create booking: " + error.message });
   } finally {
     connection.release();
   }
@@ -151,6 +175,7 @@ app.get("/api/bookings", async (req, res) => {
         a.id,
         a.appointment_date,
         a.start_time,
+        a.end_time,
         u.full_name as customer_name,
         s.name as service_name,
         st.full_name as staff_name
@@ -219,6 +244,7 @@ app.get("/api/setup-db", async (req, res) => {
         service_id INT,
         appointment_date DATE NOT NULL,
         start_time VARCHAR(10) NOT NULL,
+        end_time VARCHAR(10),
         status VARCHAR(50) DEFAULT 'confirmed',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id),
