@@ -108,7 +108,19 @@ const DashboardHome = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const res = await fetch("/api/dashboard/stats");
+      // Get local date in YYYY-MM-DD format
+
+      const today = new Date();
+
+      const year = today.getFullYear();
+
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+
+      const day = String(today.getDate()).padStart(2, "0");
+
+      const dateStr = `${year}-${month}-${day}`;
+
+      const res = await fetch(`/api/dashboard/stats?date=${dateStr}`);
 
       const data = res.ok
         ? await res.json()

@@ -235,19 +235,29 @@ app.post("/api/bookings", async (req, res) => {
 
 // Get Dashboard Stats (Consolidated)
 app.get("/api/dashboard/stats", async (req, res) => {
+  const dateParam = req.query.date; // Expecting 'YYYY-MM-DD'
+
+  res.set("Cache-Control", "no-store"); // Prevent caching
+
   try {
     const connection = await db.getConnection();
     try {
-      // 1. Today's Revenue & Count
-      const [todayStats] = await connection.query(`
+      // 1. Today's Revenue & Count (Using provided date or server's CURDATE)
+      const dateClause = dateParam ? "?" : "CURDATE()";
+      const dateValue = dateParam ? [dateParam] : [];
+
+      const [todayStats] = await connection.query(
+        `
         SELECT
           COALESCE(SUM(s.price), 0) as revenue,
           COUNT(*) as count
         FROM appointments a
         JOIN services s ON a.service_id = s.id
-        WHERE a.appointment_date = CURDATE()
+        WHERE a.appointment_date = ${dateClause}
         AND a.status != 'cancelled'
-      `);
+      `,
+        dateValue,
+      );
 
       // 2. All-time Stats for Avg Ticket & No-Show Rate
       const [overallStats] = await connection.query(`
@@ -284,7 +294,6 @@ app.get("/api/dashboard/stats", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch dashboard stats" });
   }
 });
-
 // Get All Bookings (for Admin)
 app.get("/api/bookings", async (req, res) => {
   try {
