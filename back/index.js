@@ -283,7 +283,7 @@ app.post("/api/bookings", async (req, res) => {
   }
 });
 
-// Check Availability (Updated to include Schedules)
+// Check Availability (Using JSON Schedule)
 app.get("/api/availability", async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: "Date is required" });
@@ -295,15 +295,42 @@ app.get("/api/availability", async (req, res) => {
       "SELECT start_time, end_time, staff_id FROM appointments WHERE appointment_date = ? AND status != 'cancelled'",
       [date],
     );
-    const [staff] = await db.query(
-      "SELECT id, full_name FROM staff WHERE is_active = true",
+    const [staffList] = await db.query(
+      "SELECT id, full_name, schedule FROM staff WHERE is_active = true",
     );
 
-    // Fetch schedules for this day of the week
-    const [schedules] = await db.query(
-      "SELECT staff_id, start_time, end_time, is_working FROM schedule WHERE day_of_week = ?",
-      [dayOfWeek],
-    );
+    // Extract schedules for the specific day from JSON
+    const schedules = [];
+
+    for (const s of staffList) {
+      // staff.schedule is already an object/array if using mysql2 with JSON support,
+      // or a string if not. Let's handle both.
+      let weekSchedule = s.schedule;
+      if (typeof weekSchedule === "string") {
+        try {
+          weekSchedule = JSON.parse(weekSchedule);
+        } catch (e) {
+          weekSchedule = [];
+        }
+      }
+
+      if (Array.isArray(weekSchedule)) {
+        const daySchedule = weekSchedule.find(
+          (d) => d.day_of_week === dayOfWeek,
+        );
+        if (daySchedule) {
+          schedules.push({
+            staff_id: s.id,
+            start_time: daySchedule.start_time,
+            end_time: daySchedule.end_time,
+            is_working: daySchedule.is_working,
+          });
+        }
+      }
+    }
+
+    // Return sanitized staff list (without raw schedule dump) for the dropdown
+    const staff = staffList.map((s) => ({ id: s.id, full_name: s.full_name }));
 
     res.json({ bookings, staff, schedules });
   } catch (error) {
@@ -312,17 +339,28 @@ app.get("/api/availability", async (req, res) => {
   }
 });
 
-// --- Staff Schedule API ---
+// --- Staff Schedule API (JSON Column) ---
 
 // Get Staff Schedule
 app.get("/api/staff/:id/schedule", async (req, res) => {
   const { id } = req.params;
   try {
-    const [rows] = await db.query(
-      "SELECT day_of_week, start_time, end_time, is_working FROM schedule WHERE staff_id = ? ORDER BY day_of_week",
-      [id],
-    );
-    res.json(rows);
+    const [rows] = await db.query("SELECT schedule FROM staff WHERE id = ?", [
+      id,
+    ]);
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Staff not found" });
+
+    let schedule = rows[0].schedule;
+    if (typeof schedule === "string") {
+      try {
+        schedule = JSON.parse(schedule);
+      } catch (e) {
+        schedule = [];
+      }
+    }
+
+    res.json(schedule || []);
   } catch (error) {
     console.error("Error fetching schedule:", error);
     res.status(500).json({ error: "Failed to fetch schedule" });
@@ -332,34 +370,21 @@ app.get("/api/staff/:id/schedule", async (req, res) => {
 // Update Staff Schedule
 app.post("/api/staff/:id/schedule", async (req, res) => {
   const { id } = req.params;
-  const { schedule } = req.body; // Expect array of { day_of_week, start_time, end_time, is_working }
+  const { schedule } = req.body;
 
   if (!Array.isArray(schedule)) {
     return res.status(400).json({ error: "Invalid schedule format" });
   }
 
-  const connection = await db.getConnection();
   try {
-    await connection.beginTransaction();
-
-    // Upsert logic (Delete existing for this staff and re-insert is easiest)
-    await connection.query("DELETE FROM schedule WHERE staff_id = ?", [id]);
-
-    for (const day of schedule) {
-      await connection.query(
-        "INSERT INTO schedule (staff_id, day_of_week, start_time, end_time, is_working) VALUES (?, ?, ?, ?, ?)",
-        [id, day.day_of_week, day.start_time, day.end_time, day.is_working],
-      );
-    }
-
-    await connection.commit();
+    await db.query("UPDATE staff SET schedule = ? WHERE id = ?", [
+      JSON.stringify(schedule),
+      id,
+    ]);
     res.json({ message: "Schedule updated successfully" });
   } catch (error) {
-    await connection.rollback();
     console.error("Error updating schedule:", error);
     res.status(500).json({ error: "Failed to update schedule" });
-  } finally {
-    connection.release();
   }
 });
 
@@ -546,18 +571,26 @@ app.get("/api/setup-db", async (req, res) => {
     // 0. Drop existing tables (Reverse order of dependencies)
     await connection.query("DROP TABLE IF EXISTS payments");
     await connection.query("DROP TABLE IF EXISTS appointments");
+    await connection.query("DROP TABLE IF EXISTS marketing_campaigns");
+    await connection.query("DROP TABLE IF EXISTS shop_settings");
     await connection.query("DROP TABLE IF EXISTS services");
-    await connection.query("DROP TABLE IF EXISTS schedule");
-    await connection.query("DROP TABLE IF EXISTS staff");
+    await connection.query("DROP TABLE IF EXISTS staff"); // staff table has schedule JSON now
     await connection.query("DROP TABLE IF EXISTS users");
+    await connection.query("DROP TABLE IF EXISTS schedule"); // Clean up old table if exists
 
-    // 1. Create Tables
+    // 1. Create Tables (Matching User's SQL)
+
     await connection.query(`
       CREATE TABLE users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         full_name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        phone_number VARCHAR(255),
+        is_vip BOOLEAN DEFAULT false,
+        total_spend DECIMAL(10,2) DEFAULT 0,
+        visit_count INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP
       )
     `);
 
@@ -565,19 +598,12 @@ app.get("/api/setup-db", async (req, res) => {
       CREATE TABLE staff (
         id INT AUTO_INCREMENT PRIMARY KEY,
         full_name VARCHAR(255) NOT NULL,
-        is_active BOOLEAN DEFAULT TRUE
-      )
-    `);
-
-    await connection.query(`
-      CREATE TABLE schedule (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        staff_id INT,
-        day_of_week INT, -- 0 = Sunday, 6 = Saturday
-        start_time VARCHAR(10),
-        end_time VARCHAR(10),
-        is_working BOOLEAN DEFAULT TRUE,
-        FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+        role VARCHAR(255),
+        bio TEXT,
+        rating DECIMAL(3,2),
+        is_active BOOLEAN DEFAULT true,
+        schedule JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -585,11 +611,11 @@ app.get("/api/setup-db", async (req, res) => {
       CREATE TABLE services (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        category VARCHAR(50),
+        category VARCHAR(255),
         description TEXT,
-        duration_minutes INT,
-        price DECIMAL(10, 2) NOT NULL,
-        is_active BOOLEAN DEFAULT TRUE
+        duration_minutes INT NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        is_active BOOLEAN DEFAULT true
       )
     `);
 
@@ -600,9 +626,9 @@ app.get("/api/setup-db", async (req, res) => {
         staff_id INT,
         service_id INT,
         appointment_date DATE NOT NULL,
-        start_time VARCHAR(10) NOT NULL,
-        end_time VARCHAR(10),
-        status VARCHAR(50) DEFAULT 'confirmed',
+        start_time TIME NOT NULL,
+        end_time TIME NOT NULL,
+        status VARCHAR(255) DEFAULT 'confirmed',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (staff_id) REFERENCES staff(id),
@@ -610,7 +636,22 @@ app.get("/api/setup-db", async (req, res) => {
       )
     `);
 
+    await connection.query(`
+      CREATE TABLE payments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        appointment_id INT,
+        user_id INT,
+        amount DECIMAL(10,2) NOT NULL,
+        method VARCHAR(255),
+        status VARCHAR(255) DEFAULT 'pending',
+        transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (appointment_id) REFERENCES appointments(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
     // 2. Seed Data
+
     await connection.query(`
       INSERT INTO services (name, category, description, duration_minutes, price) VALUES
       ('Classic Cut', 'Hair', 'Standard haircut', 30, 25.00),
@@ -619,32 +660,32 @@ app.get("/api/setup-db", async (req, res) => {
       ('Full Works', 'Package', 'Haircut + Beard + Hot Towel', 60, 55.00)
     `);
 
-    await connection.query(`
-      INSERT INTO staff (full_name) VALUES
-      ('Luis (Master Barber)'),
-      ('Marcus (Senior)'),
-      ('Sarah (Stylist)')
-    `);
-
-    // Seed Schedules (Default 09:00 - 17:00, Mon-Sat)
-    // IDs are 1, 2, 3 because we just reset the DB
-    const staffIds = [1, 2, 3];
-    for (const staffId of staffIds) {
-      for (let day = 0; day <= 6; day++) {
-        const isWeekend = day === 0; // Sunday off
-        await connection.query(
-          `
-          INSERT INTO schedule (staff_id, day_of_week, start_time, end_time, is_working)
-          VALUES (?, ?, '09:00', '17:00', ?)
-        `,
-          [staffId, day, !isWeekend],
-        );
-      }
+    // Default Schedule JSON (Mon-Sat 9-5)
+    const defaultSchedule = [];
+    for (let day = 0; day <= 6; day++) {
+      defaultSchedule.push({
+        day_of_week: day,
+        start_time: "09:00",
+        end_time: "17:00",
+        is_working: day !== 0, // Sunday off
+      });
     }
+    const scheduleJson = JSON.stringify(defaultSchedule);
+
+    await connection.query(
+      `
+      INSERT INTO staff (full_name, role, schedule) VALUES
+      ('Luis (Master Barber)', 'Master Barber', ?),
+      ('Marcus (Senior)', 'Senior Stylist', ?),
+      ('Sarah (Stylist)', 'Stylist', ?)
+    `,
+      [scheduleJson, scheduleJson, scheduleJson],
+    );
 
     await connection.commit();
     res.json({
-      message: "Database reset and seeded successfully (Full Schema)!",
+      message:
+        "Database reset and seeded successfully (User Schema with JSON Schedule)!",
     });
   } catch (error) {
     await connection.rollback();
