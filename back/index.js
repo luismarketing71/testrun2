@@ -340,55 +340,6 @@ app.get("/api/dashboard/appointments/today", async (req, res) => {
   }
 });
 
-// Get No-Show Rate
-app.get("/api/dashboard/metrics/noshow", async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  try {
-    const connection = await db.getConnection();
-    try {
-      const [rows] = await connection.query(`
-        SELECT
-          COUNT(*) as total_count,
-          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count
-        FROM appointments
-      `);
-      const totalApps = rows[0].total_count || 0;
-      const cancelledApps = rows[0].cancelled_count || 0;
-      const noShowRate =
-        totalApps > 0 ? ((cancelledApps / totalApps) * 100).toFixed(1) : 0;
-      res.json({ noShowRate });
-    } finally {
-      connection.release();
-    }
-  } catch (error) {
-    console.error("Error fetching no-show rate:", error);
-    res.status(500).json({ error: "Failed to fetch no-show rate" });
-  }
-});
-
-// Get Average Ticket
-app.get("/api/dashboard/metrics/avgticket", async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  try {
-    const connection = await db.getConnection();
-    try {
-      const [rows] = await connection.query(`
-        SELECT AVG(s.price) as avg_ticket
-        FROM appointments a
-        JOIN services s ON a.service_id = s.id
-        WHERE a.status != 'cancelled'
-      `);
-      const avgTicket = (rows[0].avg_ticket || 0).toFixed(2);
-      res.json({ avgTicket });
-    } finally {
-      connection.release();
-    }
-  } catch (error) {
-    console.error("Error fetching average ticket:", error);
-    res.status(500).json({ error: "Failed to fetch average ticket" });
-  }
-});
-
 // Get All Bookings (for Admin)
 app.get("/api/bookings", async (req, res) => {
   try {

@@ -99,33 +99,21 @@ const DashboardHome = () => {
   const [stats, setStats] = useState({
     revenue: 0,
     appointments: 0,
-    noShowRate: 0,
-    avgTicket: 0,
   });
 
   const fetchDashboardData = async () => {
     try {
-      const [revRes, apptRes, noShowRes, avgTicketRes] = await Promise.all([
+      const [revRes, apptRes] = await Promise.all([
         fetch("/api/dashboard/revenue/monthly"),
         fetch("/api/dashboard/appointments/today"),
-        fetch("/api/dashboard/metrics/noshow"),
-        fetch("/api/dashboard/metrics/avgticket"),
       ]);
 
       const revenueData = revRes.ok ? await revRes.json() : { revenue: 0 };
       const apptData = apptRes.ok ? await apptRes.json() : { count: 0 };
-      const noShowData = noShowRes.ok
-        ? await noShowRes.json()
-        : { noShowRate: 0 };
-      const avgTicketData = avgTicketRes.ok
-        ? await avgTicketRes.json()
-        : { avgTicket: 0 };
 
       setStats({
         revenue: revenueData.revenue,
         appointments: apptData.count,
-        noShowRate: noShowData.noShowRate,
-        avgTicket: avgTicketData.avgTicket,
       });
     } catch (e) {
       console.error("Dashboard fetch error:", e);
@@ -156,20 +144,6 @@ const DashboardHome = () => {
           title="Appointments"
           value={stats.appointments}
           subtext="Today's bookings"
-        />
-
-        <StatCard
-          title="No-Show Rate"
-          value={`${stats.noShowRate}%`}
-          subtext="Cancellation rate"
-          trend="down"
-        />
-
-        <StatCard
-          title="Avg. Ticket"
-          value={`£${stats.avgTicket}`}
-          subtext="All-time average"
-          trend="up"
         />
       </div>
     </div>
