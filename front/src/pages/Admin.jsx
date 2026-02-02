@@ -98,35 +98,35 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 const DashboardHome = () => {
   const [stats, setStats] = useState({
     revenue: 0,
-
     appointments: 0,
-
     noShowRate: 0,
-
     avgTicket: 0,
   });
 
   const fetchDashboardData = async () => {
     try {
-      // Get local date in YYYY-MM-DD format
+      const [revRes, apptRes, noShowRes, avgTicketRes] = await Promise.all([
+        fetch("/api/dashboard/revenue/monthly"),
+        fetch("/api/dashboard/appointments/today"),
+        fetch("/api/dashboard/metrics/noshow"),
+        fetch("/api/dashboard/metrics/avgticket"),
+      ]);
 
-      const today = new Date();
+      const revenueData = revRes.ok ? await revRes.json() : { revenue: 0 };
+      const apptData = apptRes.ok ? await apptRes.json() : { count: 0 };
+      const noShowData = noShowRes.ok
+        ? await noShowRes.json()
+        : { noShowRate: 0 };
+      const avgTicketData = avgTicketRes.ok
+        ? await avgTicketRes.json()
+        : { avgTicket: 0 };
 
-      const year = today.getFullYear();
-
-      const month = String(today.getMonth() + 1).padStart(2, "0");
-
-      const day = String(today.getDate()).padStart(2, "0");
-
-      const dateStr = `${year}-${month}-${day}`;
-
-      const res = await fetch(`/api/dashboard/stats?date=${dateStr}`);
-
-      const data = res.ok
-        ? await res.json()
-        : { revenue: 0, appointments: 0, noShowRate: 0, avgTicket: 0 };
-
-      setStats(data);
+      setStats({
+        revenue: revenueData.revenue,
+        appointments: apptData.count,
+        noShowRate: noShowData.noShowRate,
+        avgTicket: avgTicketData.avgTicket,
+      });
     } catch (e) {
       console.error("Dashboard fetch error:", e);
     }
@@ -146,9 +146,9 @@ const DashboardHome = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Today's Revenue"
+          title="Monthly Revenue"
           value={`£${stats.revenue}`}
-          subtext="Updated just now"
+          subtext="This month"
           trend="up"
         />
 
