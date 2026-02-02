@@ -15,7 +15,9 @@ import {
   Search,
   MoreHorizontal,
   X,
+  Clock, // Added Clock
 } from "lucide-react";
+import Schedule from "./Schedule"; // Added Import
 
 // --- Shared UI Components ---
 
@@ -627,6 +629,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "" },
   { icon: Calendar, label: "Bookings", path: "bookings" },
   { icon: Users, label: "Staff", path: "staff" },
+  { icon: Clock, label: "Schedule", path: "schedule" }, // Added Schedule item
   { icon: Scissors, label: "Services", path: "services" },
 ];
 
@@ -675,6 +678,7 @@ export default function Admin() {
           <Route path="/" element={<DashboardHome />} />
           <Route path="bookings" element={<Bookings />} />
           <Route path="staff" element={<Staff />} />
+          <Route path="schedule" element={<Schedule />} /> {/* Added Route */}
           <Route path="services" element={<Services />} />
         </Routes>
       </main>

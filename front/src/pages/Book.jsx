@@ -1,20 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-
-// Helper to generate 30-minute slots
-const generateTimeSlots = () => {
-  const slots = [];
-  const startHour = 9;
-  const endHour = 18; // 6 PM
-
-  for (let i = startHour; i < endHour; i++) {
-    slots.push(`${i.toString().padStart(2, "0")}:00`);
-    slots.push(`${i.toString().padStart(2, "0")}:30`);
-  }
-  return slots;
-};
-
-const timeSlots = generateTimeSlots();
 
 // Helper: Convert "HH:MM" to minutes
 const timeToMinutes = (timeStr) => {
@@ -22,11 +7,22 @@ const timeToMinutes = (timeStr) => {
   return hours * 60 + minutes;
 };
 
+// Helper: Convert minutes to "HH:MM"
+const minutesToTime = (minutes) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+};
+
 export default function Book() {
   const [services, setServices] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [availability, setAvailability] = useState({ bookings: [], staff: [] });
+  const [availability, setAvailability] = useState({
+    bookings: [],
+    staff: [],
+    schedules: [],
+  });
 
   const [formData, setFormData] = useState({
     serviceId: "",
@@ -78,8 +74,45 @@ export default function Book() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Generate Time Slots based on Schedules
+  const timeSlots = useMemo(() => {
+    if (!availability.schedules || availability.schedules.length === 0) {
+      return [];
+    }
+
+    // Filter relevant schedules
+    let activeSchedules = availability.schedules.filter((s) => s.is_working);
+
+    if (formData.staffId) {
+      activeSchedules = activeSchedules.filter(
+        (s) => String(s.staff_id) === String(formData.staffId),
+      );
+    }
+
+    if (activeSchedules.length === 0) return [];
+
+    // Find global start and end times
+    let minStart = 24 * 60;
+    let maxEnd = 0;
+
+    activeSchedules.forEach((s) => {
+      const start = timeToMinutes(s.start_time);
+      const end = timeToMinutes(s.end_time);
+      if (start < minStart) minStart = start;
+      if (end > maxEnd) maxEnd = end;
+    });
+
+    // Generate 30-min slots
+    const slots = [];
+    for (let t = minStart; t < maxEnd; t += 30) {
+      slots.push(minutesToTime(t));
+    }
+
+    return slots;
+  }, [availability.schedules, formData.staffId]);
+
   const isSlotAvailable = (slotTime) => {
-    if (!formData.serviceId) return true; // Can't check without duration
+    if (!formData.serviceId) return true;
 
     const service = services.find((s) => String(s.id) === formData.serviceId);
     const duration = service ? service.duration_minutes || 30 : 30;
@@ -93,23 +126,46 @@ export default function Book() {
       return Math.max(startMin, bStartMin) < Math.min(endMin, bEndMin);
     };
 
+    // Helper: Is staff working during this ENTIRE slot?
+    const isWorking = (staffId) => {
+      const schedule = availability.schedules.find(
+        (s) => String(s.staff_id) === String(staffId),
+      );
+      if (!schedule || !schedule.is_working) return false;
+      const sStart = timeToMinutes(schedule.start_time);
+      const sEnd = timeToMinutes(schedule.end_time);
+      return startMin >= sStart && endMin <= sEnd;
+    };
+
     if (formData.staffId) {
-      // Specific Staff: Check if THIS staff has a collision
+      // Specific Staff
+      if (!isWorking(formData.staffId)) return false; // Not working
+
       return !availability.bookings.some(
         (b) =>
           String(b.staff_id) === String(formData.staffId) &&
           isOverlapping(b.start_time, b.end_time),
       );
     } else {
-      // Any Staff: Check if ALL staff are busy
-      const busyStaffIds = new Set();
-      availability.bookings.forEach((b) => {
-        if (isOverlapping(b.start_time, b.end_time)) {
-          busyStaffIds.add(b.staff_id);
-        }
+      // Any Staff
+      // Find ALL staff who are working during this slot
+      const workingStaffIds = availability.staff
+        .filter((s) => isWorking(s.id))
+        .map((s) => s.id);
+
+      if (workingStaffIds.length === 0) return false; // No one is working
+
+      // Check if at least one of them is free
+      const freeStaff = workingStaffIds.find((staffId) => {
+        const hasBooking = availability.bookings.some(
+          (b) =>
+            String(b.staff_id) === String(staffId) &&
+            isOverlapping(b.start_time, b.end_time),
+        );
+        return !hasBooking;
       });
-      // If number of busy staff < total active staff, then at least one is free
-      return busyStaffIds.size < availability.staff.length;
+
+      return !!freeStaff;
     }
   };
 
@@ -124,7 +180,6 @@ export default function Book() {
 
       if (res.ok) {
         alert("Booking Request Sent Successfully!");
-        // Reset form
         setFormData({
           serviceId: "",
           staffId: "",

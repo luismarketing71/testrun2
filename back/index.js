@@ -283,12 +283,14 @@ app.post("/api/bookings", async (req, res) => {
   }
 });
 
-// Check Availability
+// Check Availability (Updated to include Schedules)
 app.get("/api/availability", async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: "Date is required" });
 
   try {
+    const dayOfWeek = new Date(date).getDay(); // 0 (Sun) - 6 (Sat)
+
     const [bookings] = await db.query(
       "SELECT start_time, end_time, staff_id FROM appointments WHERE appointment_date = ? AND status != 'cancelled'",
       [date],
@@ -296,10 +298,70 @@ app.get("/api/availability", async (req, res) => {
     const [staff] = await db.query(
       "SELECT id, full_name FROM staff WHERE is_active = true",
     );
-    res.json({ bookings, staff });
+
+    // Fetch schedules for this day of the week
+    const [schedules] = await db.query(
+      "SELECT staff_id, start_time, end_time, is_working FROM staff_schedules WHERE day_of_week = ?",
+      [dayOfWeek],
+    );
+
+    res.json({ bookings, staff, schedules });
   } catch (error) {
     console.error("Error fetching availability:", error);
     res.status(500).json({ error: "Failed to fetch availability" });
+  }
+});
+
+// --- Staff Schedule API ---
+
+// Get Staff Schedule
+app.get("/api/staff/:id/schedule", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await db.query(
+      "SELECT day_of_week, start_time, end_time, is_working FROM staff_schedules WHERE staff_id = ? ORDER BY day_of_week",
+      [id],
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching schedule:", error);
+    res.status(500).json({ error: "Failed to fetch schedule" });
+  }
+});
+
+// Update Staff Schedule
+app.post("/api/staff/:id/schedule", async (req, res) => {
+  const { id } = req.params;
+  const { schedule } = req.body; // Expect array of { day_of_week, start_time, end_time, is_working }
+
+  if (!Array.isArray(schedule)) {
+    return res.status(400).json({ error: "Invalid schedule format" });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Upsert logic (Delete existing for this staff and re-insert is easiest)
+    await connection.query("DELETE FROM staff_schedules WHERE staff_id = ?", [
+      id,
+    ]);
+
+    for (const day of schedule) {
+      await connection.query(
+        "INSERT INTO staff_schedules (staff_id, day_of_week, start_time, end_time, is_working) VALUES (?, ?, ?, ?, ?)",
+        [id, day.day_of_week, day.start_time, day.end_time, day.is_working],
+      );
+    }
+
+    await connection.commit();
+    res.json({ message: "Schedule updated successfully" });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error updating schedule:", error);
+    res.status(500).json({ error: "Failed to update schedule" });
+  } finally {
+    connection.release();
   }
 });
 
@@ -509,6 +571,18 @@ app.get("/api/setup-db", async (req, res) => {
     `);
 
     await connection.query(`
+      CREATE TABLE staff_schedules (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        staff_id INT,
+        day_of_week INT, -- 0 = Sunday, 6 = Saturday
+        start_time VARCHAR(10),
+        end_time VARCHAR(10),
+        is_working BOOLEAN DEFAULT TRUE,
+        FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
       CREATE TABLE services (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -552,6 +626,22 @@ app.get("/api/setup-db", async (req, res) => {
       ('Marcus (Senior)'),
       ('Sarah (Stylist)')
     `);
+
+    // Seed Schedules (Default 09:00 - 17:00, Mon-Sat)
+    // IDs are 1, 2, 3 because we just reset the DB
+    const staffIds = [1, 2, 3];
+    for (const staffId of staffIds) {
+      for (let day = 0; day <= 6; day++) {
+        const isWeekend = day === 0; // Sunday off
+        await connection.query(
+          `
+          INSERT INTO staff_schedules (staff_id, day_of_week, start_time, end_time, is_working)
+          VALUES (?, ?, '09:00', '17:00', ?)
+        `,
+          [staffId, day, !isWeekend],
+        );
+      }
+    }
 
     await connection.commit();
     res.json({
