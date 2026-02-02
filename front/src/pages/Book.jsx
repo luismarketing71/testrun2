@@ -1,10 +1,32 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
+// Helper to generate 30-minute slots
+const generateTimeSlots = () => {
+  const slots = [];
+  const startHour = 9;
+  const endHour = 18; // 6 PM
+
+  for (let i = startHour; i < endHour; i++) {
+    slots.push(`${i.toString().padStart(2, "0")}:00`);
+    slots.push(`${i.toString().padStart(2, "0")}:30`);
+  }
+  return slots;
+};
+
+const timeSlots = generateTimeSlots();
+
+// Helper: Convert "HH:MM" to minutes
+const timeToMinutes = (timeStr) => {
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
 export default function Book() {
   const [services, setServices] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [availability, setAvailability] = useState({ bookings: [], staff: [] });
 
   const [formData, setFormData] = useState({
     serviceId: "",
@@ -35,8 +57,60 @@ export default function Book() {
     fetchData();
   }, []);
 
+  // Fetch availability when date changes
+  useEffect(() => {
+    if (!formData.date) return;
+
+    const fetchAvailability = async () => {
+      try {
+        const res = await fetch(`/api/availability?date=${formData.date}`);
+        if (res.ok) {
+          setAvailability(await res.json());
+        }
+      } catch (err) {
+        console.error("Failed to load availability", err);
+      }
+    };
+    fetchAvailability();
+  }, [formData.date]);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const isSlotAvailable = (slotTime) => {
+    if (!formData.serviceId) return true; // Can't check without duration
+
+    const service = services.find((s) => String(s.id) === formData.serviceId);
+    const duration = service ? service.duration_minutes || 30 : 30;
+
+    const startMin = timeToMinutes(slotTime);
+    const endMin = startMin + duration;
+
+    const isOverlapping = (bStart, bEnd) => {
+      const bStartMin = timeToMinutes(bStart);
+      const bEndMin = timeToMinutes(bEnd);
+      return Math.max(startMin, bStartMin) < Math.min(endMin, bEndMin);
+    };
+
+    if (formData.staffId) {
+      // Specific Staff: Check if THIS staff has a collision
+      return !availability.bookings.some(
+        (b) =>
+          String(b.staff_id) === String(formData.staffId) &&
+          isOverlapping(b.start_time, b.end_time),
+      );
+    } else {
+      // Any Staff: Check if ALL staff are busy
+      const busyStaffIds = new Set();
+      availability.bookings.forEach((b) => {
+        if (isOverlapping(b.start_time, b.end_time)) {
+          busyStaffIds.add(b.staff_id);
+        }
+      });
+      // If number of busy staff < total active staff, then at least one is free
+      return busyStaffIds.size < availability.staff.length;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -50,7 +124,7 @@ export default function Book() {
 
       if (res.ok) {
         alert("Booking Request Sent Successfully!");
-        // Reset form or redirect
+        // Reset form
         setFormData({
           serviceId: "",
           staffId: "",
@@ -60,7 +134,8 @@ export default function Book() {
           email: "",
         });
       } else {
-        alert("Failed to submit booking. Please try again.");
+        const err = await res.json();
+        alert("Failed to submit booking: " + (err.error || "Unknown error"));
       }
     } catch (error) {
       console.error("Booking error:", error);
@@ -99,7 +174,7 @@ export default function Book() {
               <option value="">-- Choose a Service --</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} - £{s.price}
+                  {s.name} - £{s.price} ({s.duration_minutes}m)
                 </option>
               ))}
             </select>
@@ -137,14 +212,33 @@ export default function Book() {
                   required
                   className="w-full bg-barber-black border border-white/10 text-white p-4 rounded-none focus:ring-2 focus:ring-barber-gold focus:border-transparent transition-all"
                 />
-                <input
-                  type="time"
+                <select
                   name="time"
                   value={formData.time}
                   onChange={handleChange}
                   required
-                  className="w-full bg-barber-black border border-white/10 text-white p-4 rounded-none focus:ring-2 focus:ring-barber-gold focus:border-transparent transition-all"
-                />
+                  disabled={!formData.date}
+                  className={`w-full bg-barber-black border border-white/10 text-white p-4 rounded-none focus:ring-2 focus:ring-barber-gold focus:border-transparent transition-all ${!formData.date ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <option value="">
+                    {formData.date ? "-- Time --" : "Select Date First"}
+                  </option>
+                  {timeSlots.map((slot) => {
+                    const isAvailable = isSlotAvailable(slot);
+                    return (
+                      <option
+                        key={slot}
+                        value={slot}
+                        disabled={!isAvailable}
+                        className={
+                          !isAvailable ? "text-gray-600 bg-gray-900" : ""
+                        }
+                      >
+                        {slot} {isAvailable ? "" : "(Taken)"}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
             </div>
           </div>

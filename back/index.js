@@ -163,7 +163,13 @@ app.delete("/api/staff/:id", async (req, res) => {
   }
 });
 
-// Create Booking
+// Helper: Convert "HH:MM" to minutes since midnight
+const timeToMinutes = (timeStr) => {
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+// Create Booking (With Availability Check)
 app.post("/api/bookings", async (req, res) => {
   const { name, email, serviceId, staffId, date, time } = req.body;
 
@@ -175,29 +181,73 @@ app.post("/api/bookings", async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get Service Duration to calculate End Time
+    // 1. Get Service Details
     const [serviceRows] = await connection.query(
       "SELECT duration_minutes FROM services WHERE id = ?",
       [serviceId],
     );
 
-    if (serviceRows.length === 0) {
-      throw new Error("Service not found");
+    if (serviceRows.length === 0) throw new Error("Service not found");
+    const duration = serviceRows[0].duration_minutes || 30;
+
+    // 2. Calculate New Booking Time Range
+    const startMin = timeToMinutes(time);
+    const endMin = startMin + duration;
+
+    // Format end_time for DB
+    const endHours = Math.floor(endMin / 60);
+    const endMinutes = endMin % 60;
+    const endTime = `${String(endHours).padStart(2, "0")}:${String(endMinutes).padStart(2, "0")}`;
+
+    // 3. Fetch Existing Bookings for Date
+    const [existingBookings] = await connection.query(
+      "SELECT start_time, end_time, staff_id FROM appointments WHERE appointment_date = ? AND status != 'cancelled'",
+      [date],
+    );
+
+    // 4. Fetch All Active Staff (for "Any" assignment)
+    const [allStaff] = await connection.query(
+      "SELECT id FROM staff WHERE is_active = true",
+    );
+
+    // 5. Check Availability
+    let assignedStaffId = staffId;
+
+    const isOverlapping = (bStart, bEnd) => {
+      const bStartMin = timeToMinutes(bStart);
+      const bEndMin = timeToMinutes(bEnd);
+      return Math.max(startMin, bStartMin) < Math.min(endMin, bEndMin);
+    };
+
+    if (assignedStaffId) {
+      // Case A: Specific Staff Selected
+      const conflict = existingBookings.find(
+        (b) =>
+          String(b.staff_id) === String(assignedStaffId) &&
+          isOverlapping(b.start_time, b.end_time),
+      );
+
+      if (conflict) {
+        throw new Error("Selected staff is not available at this time.");
+      }
+    } else {
+      // Case B: "Any" Staff Selected -> Find first available
+      const busyStaffIds = new Set();
+      existingBookings.forEach((b) => {
+        if (isOverlapping(b.start_time, b.end_time)) {
+          busyStaffIds.add(b.staff_id);
+        }
+      });
+
+      const availableStaff = allStaff.find((s) => !busyStaffIds.has(s.id));
+
+      if (!availableStaff) {
+        throw new Error("No staff members are available at this time.");
+      }
+      assignedStaffId = availableStaff.id;
     }
 
-    const duration = serviceRows[0].duration_minutes || 30; // Default 30 mins
-
-    // Calculate End Time
-    const [hours, minutes] = time.split(":").map(Number);
-    const endDate = new Date();
-    endDate.setHours(hours);
-    endDate.setMinutes(minutes + duration);
-
-    const endHours = String(endDate.getHours()).padStart(2, "0");
-    const endMinutes = String(endDate.getMinutes()).padStart(2, "0");
-    const endTime = `${endHours}:${endMinutes}`;
-
-    // 2. Find or Create User
+    // 6. Create User if needed
     let [users] = await connection.query(
       "SELECT id FROM users WHERE email = ?",
       [email],
@@ -214,10 +264,10 @@ app.post("/api/bookings", async (req, res) => {
       userId = result.insertId;
     }
 
-    // 3. Create Appointment (Now includes end_time)
+    // 7. Insert Appointment
     await connection.query(
       "INSERT INTO appointments (user_id, service_id, staff_id, appointment_date, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [userId, serviceId, staffId || null, date, time, endTime, "confirmed"],
+      [userId, serviceId, assignedStaffId, date, time, endTime, "confirmed"],
     );
 
     await connection.commit();
@@ -226,10 +276,30 @@ app.post("/api/bookings", async (req, res) => {
     await connection.rollback();
     console.error("Booking error:", error);
     res
-      .status(500)
-      .json({ error: "Failed to create booking: " + error.message });
+      .status(409) // Conflict
+      .json({ error: error.message });
   } finally {
     connection.release();
+  }
+});
+
+// Check Availability
+app.get("/api/availability", async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: "Date is required" });
+
+  try {
+    const [bookings] = await db.query(
+      "SELECT start_time, end_time, staff_id FROM appointments WHERE appointment_date = ? AND status != 'cancelled'",
+      [date],
+    );
+    const [staff] = await db.query(
+      "SELECT id, full_name FROM staff WHERE is_active = true",
+    );
+    res.json({ bookings, staff });
+  } catch (error) {
+    console.error("Error fetching availability:", error);
+    res.status(500).json({ error: "Failed to fetch availability" });
   }
 });
 
