@@ -301,7 +301,7 @@ app.get("/api/availability", async (req, res) => {
 
     // Fetch schedules for this day of the week
     const [schedules] = await db.query(
-      "SELECT staff_id, start_time, end_time, is_working FROM staff_schedules WHERE day_of_week = ?",
+      "SELECT staff_id, start_time, end_time, is_working FROM schedule WHERE day_of_week = ?",
       [dayOfWeek],
     );
 
@@ -319,7 +319,7 @@ app.get("/api/staff/:id/schedule", async (req, res) => {
   const { id } = req.params;
   try {
     const [rows] = await db.query(
-      "SELECT day_of_week, start_time, end_time, is_working FROM staff_schedules WHERE staff_id = ? ORDER BY day_of_week",
+      "SELECT day_of_week, start_time, end_time, is_working FROM schedule WHERE staff_id = ? ORDER BY day_of_week",
       [id],
     );
     res.json(rows);
@@ -343,13 +343,11 @@ app.post("/api/staff/:id/schedule", async (req, res) => {
     await connection.beginTransaction();
 
     // Upsert logic (Delete existing for this staff and re-insert is easiest)
-    await connection.query("DELETE FROM staff_schedules WHERE staff_id = ?", [
-      id,
-    ]);
+    await connection.query("DELETE FROM schedule WHERE staff_id = ?", [id]);
 
     for (const day of schedule) {
       await connection.query(
-        "INSERT INTO staff_schedules (staff_id, day_of_week, start_time, end_time, is_working) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO schedule (staff_id, day_of_week, start_time, end_time, is_working) VALUES (?, ?, ?, ?, ?)",
         [id, day.day_of_week, day.start_time, day.end_time, day.is_working],
       );
     }
@@ -549,6 +547,7 @@ app.get("/api/setup-db", async (req, res) => {
     await connection.query("DROP TABLE IF EXISTS payments");
     await connection.query("DROP TABLE IF EXISTS appointments");
     await connection.query("DROP TABLE IF EXISTS services");
+    await connection.query("DROP TABLE IF EXISTS schedule");
     await connection.query("DROP TABLE IF EXISTS staff");
     await connection.query("DROP TABLE IF EXISTS users");
 
@@ -571,7 +570,7 @@ app.get("/api/setup-db", async (req, res) => {
     `);
 
     await connection.query(`
-      CREATE TABLE staff_schedules (
+      CREATE TABLE schedule (
         id INT AUTO_INCREMENT PRIMARY KEY,
         staff_id INT,
         day_of_week INT, -- 0 = Sunday, 6 = Saturday
@@ -635,7 +634,7 @@ app.get("/api/setup-db", async (req, res) => {
         const isWeekend = day === 0; // Sunday off
         await connection.query(
           `
-          INSERT INTO staff_schedules (staff_id, day_of_week, start_time, end_time, is_working)
+          INSERT INTO schedule (staff_id, day_of_week, start_time, end_time, is_working)
           VALUES (?, ?, '09:00', '17:00', ?)
         `,
           [staffId, day, !isWeekend],
