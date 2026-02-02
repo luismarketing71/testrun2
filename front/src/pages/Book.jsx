@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 // Helper: Convert "HH:MM" to minutes
 const timeToMinutes = (timeStr) => {
@@ -15,6 +16,7 @@ const minutesToTime = (minutes) => {
 };
 
 export default function Book() {
+  const navigate = useNavigate();
   const [services, setServices] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -179,7 +181,30 @@ export default function Book() {
       });
 
       if (res.ok) {
-        alert("Booking Request Sent Successfully!");
+        // Find names for the success page
+        const service = services.find(
+          (s) => String(s.id) === String(formData.serviceId),
+        );
+        const staffMember = staff.find(
+          (s) => String(s.id) === String(formData.staffId),
+        );
+
+        navigate("/booking-success", {
+          state: {
+            booking: {
+              date: formData.date,
+              time: formData.time,
+              serviceName: service ? service.name : "Service",
+              price: service ? service.price : null,
+              staffName: staffMember
+                ? staffMember.full_name
+                : "Any Available Barber",
+              customerName: formData.name,
+            },
+          },
+        });
+
+        // Reset form
         setFormData({
           serviceId: "",
           staffId: "",
